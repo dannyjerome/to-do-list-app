@@ -8,15 +8,36 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <input
-      type="text"
-      name="to-do-list"
-      id="listInput"
-      onkeyup="handleEnter(event)"
-      placeholder="Add items to your list"
-    /><button type="submit" onclick="pushList()">Add to list</button>
-    <p id="warning" style="color: red;"></p>
-    <ul id="list"></ul>
+    <!-- Create a container for input elements -->
+    <div class="input__wrapper">
+      <!-- Input field for adding task text -->
+      <input
+        type="text"
+        name="to-do-list"
+        id="listInput"
+        onkeyup="handleEnter(event)" 
+        placeholder="Add items to your list" 
+      />
+      <!-- Input field for specifying the due date of the task -->
+      <input
+        type="date"
+        name="to-do-list-date"
+        id="taskDate"
+        placeholder="Due date"  Placeholder text
+      />
+  
+      <!-- Button to add the task to the list -->
+      <button type="submit" id="addTask">Add to list</button>
+    </div>
+    <!-- Display a warning message if needed -->
+    <p id="warning" style="color: red"></p>
+  
+    <!-- Create an unordered list to display the task list -->
+    <ul id="taskList"></ul>
+  
+    <!-- Include the JavaScript code from index.js -->
     <script src="index.js"></script>
   </body>
+  
 </html>
+
