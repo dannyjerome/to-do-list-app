@@ -58,8 +58,11 @@ jobs:
         run: npm install -g pnpm && pnpm install
 
       - name: Bump Version & Generate Changelog
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           pnpm dlx standard-version
+          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/dannyjerome/to-do-list-app.git
           git push origin HEAD:master --follow-tags
 
       - name: Determine Branch & Tag Prefix
