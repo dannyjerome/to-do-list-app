@@ -11,9 +11,24 @@ interface TodoListProps {
   groupBy: string;
 }
 
-export default function TodoList({ todos, setTodos, sortType, stateFilter, groupBy }: TodoListProps) {
+export default function TodoList({
+  todos,
+  setTodos,
+  sortType,
+  stateFilter,
+  groupBy,
+}: TodoListProps) {
   const toggleState = (id: number) => {
-    setTodos((prev) => prev.map((todo) => (todo.id === id ? { ...todo, state: todo.state === "pending" ? "completed" : "pending" } : todo)));
+    setTodos((prev) =>
+      prev.map((todo) =>
+        todo.id === id
+          ? {
+              ...todo,
+              state: todo.state === "pending" ? "completed" : "pending",
+            }
+          : todo
+      )
+    );
   };
 
   const deleteTodo = (id: number) => {
@@ -25,33 +40,60 @@ export default function TodoList({ todos, setTodos, sortType, stateFilter, group
     return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
-  const filteredTodos = stateFilter === "all" ? sortedTodos : sortedTodos.filter((todo) => todo.state === stateFilter);
+  const filteredTodos =
+    stateFilter === "all"
+      ? sortedTodos
+      : sortedTodos.filter((todo) => todo.state === stateFilter);
 
-  const groupedTodos = groupBy === "none" ? { None: filteredTodos } :
-    groupBy === "state" ? filteredTodos.reduce((acc, todo) => {
-      (acc[todo.state] = acc[todo.state] || []).push(todo);
-      return acc;
-    }, {} as Record<string, Todo[]>) :
-    filteredTodos.reduce((acc, todo) => {
-      const date = format(new Date(todo.date), "yyyy-MM-dd");
-      (acc[date] = acc[date] || []).push(todo);
-      return acc;
-    }, {} as Record<string, Todo[]>);
+  const groupedTodos =
+    groupBy === "none"
+      ? { None: filteredTodos }
+      : groupBy === "state"
+      ? filteredTodos.reduce((acc, todo) => {
+          (acc[todo.state] = acc[todo.state] || []).push(todo);
+          return acc;
+        }, {} as Record<string, Todo[]>)
+      : filteredTodos.reduce((acc, todo) => {
+          const date = format(new Date(todo.date), "yyyy-MM-dd");
+          (acc[date] = acc[date] || []).push(todo);
+          return acc;
+        }, {} as Record<string, Todo[]>);
 
   return (
-    <div>
+    <div className="pb-10">
       {Object.entries(groupedTodos).map(([key, items]) => (
-        <div key={key} className="space-y-2">
-          {groupBy !== "none" && <h2 className="text-lg font-semibold">{key}</h2>}
+        <div key={key} className="space-y-4">
+          {groupBy !== "none" && (
+            <h2 className="text-lg font-semibold">{key}</h2>
+          )}
           {items.map((todo) => (
             <Card key={todo.id} className="p-2 flex justify-between">
-              <span className={todo.state === "completed" ? "line-through" : ""}>{todo.text}</span>
+              <div className="flex items-center justify-between space-x-2">
+                <span
+                  className={todo.state === "completed" ? "line-through" : ""}
+                >
+                  {todo.text}
+                </span>
+                <span className="text-sm text-gray-500">
+                  {format(new Date(todo.date), "yyyy-MM-dd")}
+                </span>
+              </div>
               <div className="space-x-2">
-                <Button size="sm" variant="outline" onClick={() => toggleState(todo.id)}>
+                <Button
+                  className="cursor-pointer"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => toggleState(todo.id)}
+                >
                   {todo.state === "pending" ? "✔" : "↩"}
                 </Button>
-                <Button size="sm" variant="destructive" onClick={() => deleteTodo(todo.id)}>
-                  ❌
+                <Button
+                  className="cursor-pointer"
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => deleteTodo(todo.id)}
+                >
+                  Delete
                 </Button>
               </div>
             </Card>
