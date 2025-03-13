@@ -60,7 +60,7 @@ jobs:
       - name: Bump Version & Generate Changelog
         run: |
           pnpm dlx standard-version
-          git push --follow-tags origin main
+          git push --follow-tags origin master
 
       - name: Determine Branch & Tag Prefix
         id: vars
