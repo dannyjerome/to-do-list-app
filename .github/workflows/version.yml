@@ -22,7 +22,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          # cache: "pnpm"
+
+      - name: Install pnpm
+        run: npm install -g pnpm
 
       - name: Install dependencies
         run: pnpm install
@@ -33,15 +36,34 @@ jobs:
   versioning:
     name: Semantic Versioning
     runs-on: ubuntu-latest
-    needs: lint
+
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Required for full commit history
 
-      - name: Install Semantic Release
-        run: pnpm add -g semantic-release @semantic-release/changelog @semantic-release/git @semantic-release/commit-analyzer @semantic-release/release-notes-generator
+      - name: Setup Git User Identity
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        # with:
+        #   node-version: 20
+        #   cache: "pnpm"
+
+      - name: Install Dependencies
+        run: npm install -g pnpm && pnpm install
+
+      - name: Bump Version & Generate Changelog
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          pnpm dlx standard-version
+          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/dannyjerome/to-do-list-app.git
+          git push origin HEAD:master --follow-tags
 
       - name: Determine Branch & Tag Prefix
         id: vars
