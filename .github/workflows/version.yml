@@ -1,0 +1,110 @@
+name: Semantic Versioning & Linting
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  pull_request:
+    branches:
+      - main
+      - staging
+
+jobs:
+  lint:
+    name: Lint Next.js App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          # cache: "pnpm"
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run lint
+        run: pnpm run lint
+
+  versioning:
+    name: Semantic Versioning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for full commit history
+
+      - name: Setup Git User Identity
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        # with:
+        #   node-version: 20
+        #   cache: "pnpm"
+
+      - name: Install Dependencies
+        run: npm install -g pnpm && pnpm install
+
+      - name: Bump Version & Generate Changelog
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          pnpm dlx standard-version
+          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/dannyjerome/to-do-list-app.git
+          git push origin HEAD:master --follow-tags
+
+      - name: Determine Branch & Tag Prefix
+        id: vars
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "TAG_PREFIX=" >> $GITHUB_ENV
+          else
+            echo "TAG_PREFIX=stage-" >> $GITHUB_ENV
+          fi
+
+      - name: Generate Version
+        id: version
+        run: |
+          VERSION=$(npx semantic-release --dry-run | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Create and Push Tag
+        if: env.VERSION != ''
+        run: |
+          git tag "${TAG_PREFIX}v${VERSION}"
+          git push origin "${TAG_PREFIX}v${VERSION}"
+
+  promote:
+    name: Promote Staging to PROD
+    runs-on: ubuntu-latest
+    needs: versioning
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Latest Staging Tag
+        id: staging_tag
+        run: |
+          TAG=$(git tag --sort=-creatordate | grep 'stage-v' | head -1 | sed 's/stage-//')
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Promote Tag to PROD
+        if: env.TAG != ''
+        run: |
+          git tag "v${TAG}"
+          git push origin "v${TAG}"
