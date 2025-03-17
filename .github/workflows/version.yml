@@ -1,110 +1,120 @@
 name: Semantic Versioning & Linting
 
 on:
+  workflow_dispatch:
+    inputs:
+      manually_trigger:
+        description: "Manually trigger version bump"
+        required: false
+        default: "false"
   push:
     branches:
-      - main
       - staging
   pull_request:
     branches:
-      - main
       - staging
 
 jobs:
-  lint:
-    name: Lint Next.js App
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          # cache: "pnpm"
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Run lint
-        run: pnpm run lint
-
   versioning:
     name: Semantic Versioning
+    # Skip job if commit message contains [skip-version]
+    if: ${{ !contains(github.event.head_commit.message, '[skip-version]') }}
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Required for full commit history
-
-      - name: Setup Git User Identity
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        # with:
-        #   node-version: 20
-        #   cache: "pnpm"
-
-      - name: Install Dependencies
-        run: npm install -g pnpm && pnpm install
-
-      - name: Bump Version & Generate Changelog
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: |
-          pnpm dlx standard-version
-          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/dannyjerome/to-do-list-app.git
-          git push origin HEAD:master --follow-tags
-
-      - name: Determine Branch & Tag Prefix
-        id: vars
-        run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "TAG_PREFIX=" >> $GITHUB_ENV
-          else
-            echo "TAG_PREFIX=stage-" >> $GITHUB_ENV
-          fi
-
-      - name: Generate Version
-        id: version
-        run: |
-          VERSION=$(npx semantic-release --dry-run | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Create and Push Tag
-        if: env.VERSION != ''
-        run: |
-          git tag "${TAG_PREFIX}v${VERSION}"
-          git push origin "${TAG_PREFIX}v${VERSION}"
-
-  promote:
-    name: Promote Staging to PROD
-    runs-on: ubuntu-latest
-    needs: versioning
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get Latest Staging Tag
-        id: staging_tag
+      - name: Setup Git
         run: |
-          TAG=$(git tag --sort=-creatordate | grep 'stage-v' | head -1 | sed 's/stage-//')
-          echo "TAG=$TAG" >> $GITHUB_ENV
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
 
-      - name: Promote Tag to PROD
-        if: env.TAG != ''
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      - name: Determine version bump type
+        id: bump_type
         run: |
-          git tag "v${TAG}"
-          git push origin "v${TAG}"
+          # Analyze the most recent commit message
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+
+          if [[ "$COMMIT_MSG" == *"[release]"* ]]; then
+            echo "type=major" >> $GITHUB_OUTPUT
+          elif [[ "$COMMIT_MSG" == *"[feat]"* ]]; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+          elif [[ "$COMMIT_MSG" == *"[skip-version]"* ]]; then
+            echo "type=none" >> $GITHUB_OUTPUT
+          elif [[ "$COMMIT_MSG" == *"[fix]"* ]]; then
+            # Default to patch
+            echo "type=patch" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Determined version bump type: $(cat $GITHUB_OUTPUT | grep type | cut -d= -f2)"
+
+      - name: Get current version from package.json
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Calculate new version
+        id: new_version
+        if: steps.bump_type.outputs.type != 'none'
+        run: |
+          CURRENT_VERSION=${{ steps.current_version.outputs.version }}
+          BUMP_TYPE=${{ steps.bump_type.outputs.type }}
+
+          # Split version into components
+          IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR="${VERSION_PARTS[0]}"
+          MINOR="${VERSION_PARTS[1]}"
+          PATCH="${VERSION_PARTS[2]}"
+
+          # Calculate new version based on bump type
+          if [[ "$BUMP_TYPE" == "major" ]]; then
+            NEW_VERSION="$((MAJOR + 1)).0.0"
+          elif [[ "$BUMP_TYPE" == "minor" ]]; then
+            NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+          else
+            # patch
+            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+          fi
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Update package.json version
+        if: steps.bump_type.outputs.type != 'none'
+        run: |
+          NEW_VERSION=${{ steps.new_version.outputs.version }}
+
+          # Update package.json
+          node -e "
+            const fs = require('fs');
+            const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            packageJson.version = '$NEW_VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
+          "
+
+          echo "Updated package.json to version $NEW_VERSION"
+
+      - name: Commit updated package.json
+        if: steps.bump_type.outputs.type != 'none'
+        run: |
+          git add package.json
+          git commit -m "Update version to v${{ steps.new_version.outputs.version }} [skip-version]"
+          git push origin HEAD
+
+      - name: Create and push tag
+        if: steps.bump_type.outputs.type != 'none'
+        run: |
+          TAG_NAME="v${{ steps.new_version.outputs.version }}"
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+          echo "Successfully created tag $TAG_NAME"

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { version } from "../../package.json";
 
 export default function Footer() {
   const [isVisible, setIsVisible] = useState(true);
@@ -27,7 +28,11 @@ export default function Footer() {
         isVisible ? "translate-y-0" : "translate-y-full"
       }`}
     >
-      © {year} Danny.
+      <div className="flex justify-between items-center w-full">
+        <div className="w-1/3"></div> {/* Empty div to create spacing */}
+        <div className="w-1/3 text-center">© {year} Danny.</div> {/* Centered */}
+        <div className="w-1/3 text-right">{version}</div> {/* Right-aligned */}
+      </div>
     </footer>
   );
 }
